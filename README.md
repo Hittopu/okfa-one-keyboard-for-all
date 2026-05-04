@@ -38,12 +38,12 @@
 
 如果你只是想直接使用 `okfa`，优先从 GitHub Releases 下载发布包：
 
-- Releases: [v0.1](https://github.com/Hittopu/okfa-one-keyboard-for-all/releases/tag/v0.1)
+- Releases: [v0.1.2](https://github.com/Hittopu/okfa-one-keyboard-for-all/releases/tag/v0.1.2)
 
 当前发布物：
 
-- macOS: `okfa-macos-v0.1.dmg`
-- Windows: `okfa-windows-v0.1.exe`
+- macOS: `okfa-macos-v0.1.2.dmg`
+- Windows: `okfa-windows-v0.1.2-setup.exe`
 
 如果你需要自行构建，请查看下面的源码结构和平台说明。
 
@@ -157,12 +157,12 @@ The goal is to provide a more controllable keyboard handoff workflow for real de
 
 If you only want to use `okfa`, prefer downloading the release artifacts from GitHub Releases:
 
-- Releases: [v0.1](https://github.com/Hittopu/okfa-one-keyboard-for-all/releases/tag/v0.1)
+- Releases: [v0.1.2](https://github.com/Hittopu/okfa-one-keyboard-for-all/releases/tag/v0.1.2)
 
 Current release assets:
 
-- macOS: `okfa-macos-v0.1.dmg`
-- Windows: `okfa-windows-v0.1.exe`
+- macOS: `okfa-macos-v0.1.2.dmg`
+- Windows: `okfa-windows-v0.1.2-setup.exe`
 
 If you want to build from source, see the repository layout and platform-specific READMEs below.
 
