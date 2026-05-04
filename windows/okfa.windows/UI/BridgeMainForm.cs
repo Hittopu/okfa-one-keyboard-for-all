@@ -24,7 +24,7 @@ public sealed class BridgeMainForm : Form
     private SecondaryAction _secondaryAction = SecondaryAction.None;
 
     private readonly Panel _surfacePanel = new();
-    private readonly BridgeStatusBadge _statusBadge = new();
+    private readonly PictureBox _logoPictureBox = new();
     private readonly Label _brandLabel = new();
     private readonly Label _headlineLabel = new();
     private readonly Label _messageLabel = new();
@@ -49,6 +49,7 @@ public sealed class BridgeMainForm : Form
         _inputInjector.IsEnabled = true;
         _scanner.DeviceFound += OnDeviceFound;
 
+        LoadBrandAssets();
         BuildLayout();
         RefreshUi();
     }
@@ -57,6 +58,7 @@ public sealed class BridgeMainForm : Form
     {
         base.OnHandleCreated(e);
         BridgeTheme.TryApplyWindowBackdrop(this);
+        ApplyWindowIcon();
     }
 
     protected override void OnShown(EventArgs e)
@@ -131,10 +133,11 @@ public sealed class BridgeMainForm : Form
         _brandLabel.Margin = new Padding(0, 0, 0, 12);
         _brandLabel.Text = "okfa";
 
-        _statusBadge.Size = new Size(52, 52);
-        _statusBadge.Anchor = AnchorStyles.None;
-        _statusBadge.Margin = new Padding(0, 0, 0, 18);
-        _statusBadge.Apply(BridgeBadgeKind.Waves, BridgeTheme.AccentBlue);
+        _logoPictureBox.Size = new Size(52, 52);
+        _logoPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+        _logoPictureBox.Anchor = AnchorStyles.None;
+        _logoPictureBox.Margin = new Padding(0, 0, 0, 18);
+        _logoPictureBox.BackColor = Color.Transparent;
 
         _headlineLabel.AutoSize = true;
         _headlineLabel.Font = new Font("Segoe UI Variable Display", 32f, FontStyle.Bold, GraphicsUnit.Point);
@@ -192,7 +195,7 @@ public sealed class BridgeMainForm : Form
         _buttonRow.Controls.Add(_secondaryButton);
 
         content.Controls.Add(_brandLabel, 0, 0);
-        content.Controls.Add(_statusBadge, 0, 1);
+        content.Controls.Add(_logoPictureBox, 0, 1);
         content.Controls.Add(_headlineLabel, 0, 2);
         content.Controls.Add(_messageLabel, 0, 3);
         content.Controls.Add(_deviceCaptionLabel, 0, 4);
@@ -460,7 +463,6 @@ public sealed class BridgeMainForm : Form
 
         _headlineLabel.Text = state.Headline;
         _messageLabel.Text = state.Message;
-        _statusBadge.Apply(state.BadgeKind, state.BadgeColor);
 
         _deviceCaptionLabel.Visible = state.DeviceText is not null;
         _deviceLabel.Visible = state.DeviceText is not null;
@@ -477,6 +479,37 @@ public sealed class BridgeMainForm : Form
         _secondaryButton.Enabled = state.SecondaryEnabled;
 
         _buttonRow.Visible = state.ShowPrimary || state.ShowSecondary;
+    }
+
+    private void LoadBrandAssets()
+    {
+        var assetRoot = Path.Combine(AppContext.BaseDirectory, "Assets");
+        var logoPath = Path.Combine(assetRoot, "okfa_logo.png");
+
+        if (File.Exists(logoPath))
+        {
+            using var stream = File.OpenRead(logoPath);
+            _logoPictureBox.Image = Image.FromStream(stream);
+        }
+    }
+
+    private void ApplyWindowIcon()
+    {
+        var assetRoot = Path.Combine(AppContext.BaseDirectory, "Assets");
+        var iconPath = Path.Combine(assetRoot, "okfa.ico");
+
+        if (File.Exists(iconPath))
+        {
+            using var iconStream = File.OpenRead(iconPath);
+            Icon = new Icon(iconStream);
+            return;
+        }
+
+        var embeddedIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        if (embeddedIcon is not null)
+        {
+            Icon = embeddedIcon;
+        }
     }
 
     private VisualState ComputeState()
