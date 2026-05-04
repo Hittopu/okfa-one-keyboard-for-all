@@ -1,81 +1,44 @@
+param(
+    [string]$Version = '0.1.2'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $project = Join-Path $root 'okfa.windows\okfa.windows.csproj'
 $publishDir = Join-Path $root 'okfa.windows\publish\win-x64'
-$payloadDir = Join-Path $PSScriptRoot 'payload'
-$workDir = Join-Path $PSScriptRoot 'work'
 $distDir = Join-Path $PSScriptRoot 'dist'
-$setupPath = Join-Path $distDir 'okfa-windows-v0.1.2-setup.exe'
-$sedPath = Join-Path $workDir 'okfa-windows-v0.1.2.sed'
+$issPath = Join-Path $PSScriptRoot 'okfa.iss'
+$outputBaseName = "okfa-windows-v$Version-setup"
 
 New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
-New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
-New-Item -ItemType Directory -Path $workDir -Force | Out-Null
 New-Item -ItemType Directory -Path $distDir -Force | Out-Null
 
 dotnet publish $project -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $publishDir
 
-if (Test-Path -LiteralPath $payloadDir) {
-    Remove-Item -LiteralPath $payloadDir -Recurse -Force
+$iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+if (-not (Test-Path -LiteralPath $iscc)) {
+    $iscc = Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'
 }
-New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
+if (-not (Test-Path -LiteralPath $iscc)) {
+    $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
+}
 
-Copy-Item -LiteralPath (Join-Path $publishDir '*') -Destination $payloadDir -Recurse -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install.cmd') -Destination $payloadDir -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'uninstall.cmd') -Destination $payloadDir -Force
+if (-not (Test-Path -LiteralPath $iscc)) {
+    throw 'Inno Setup compiler (ISCC.exe) was not found.'
+}
 
-$source0 = $payloadDir
-$source1 = Join-Path $payloadDir 'Assets'
+& $iscc `
+    "/DMyAppVersion=$Version" `
+    "/DPublishDir=$publishDir" `
+    "/DOutputDir=$distDir" `
+    "/DOutputBaseFilename=$outputBaseName" `
+    "/DSetupIconFile=$(Join-Path $root 'okfa.windows\Assets\okfa.ico')" `
+    $issPath
 
-$sed = @"
-[Version]
-Class=IEXPRESS
-SEDVersion=3
-
-[Options]
-PackagePurpose=InstallApp
-ShowInstallProgramWindow=1
-HideExtractAnimation=1
-UseLongFileName=1
-InsideCompressed=1
-CAB_FixedSize=0
-CAB_ResvCodeSigning=0
-RebootMode=N
-InstallPrompt=
-DisplayLicense=
-FinishMessage=
-TargetName=$setupPath
-FriendlyName=okfa Windows Installer v0.1.2
-AppLaunched=cmd.exe /d /s /c ""install.cmd""
-PostInstallCmd=<None>
-AdminQuietInstCmd=
-UserQuietInstCmd=
-SourceFiles=SourceFiles
-Strings=Strings
-
-[Strings]
-FILE0=install.cmd
-FILE1=uninstall.cmd
-FILE2=okfa.exe
-FILE3=okfa_logo.png
-
-[SourceFiles]
-SourceFiles0=$source0
-SourceFiles1=$source1
-
-[SourceFiles0]
-%FILE0%=
-%FILE1%=
-%FILE2%=
-
-[SourceFiles1]
-%FILE3%=
-"@
-
-Set-Content -LiteralPath $sedPath -Value $sed -Encoding ASCII
-
-$iexpress = Join-Path $env:WINDIR 'System32\iexpress.exe'
-& $iexpress /N /Q $sedPath
+$setupPath = Join-Path $distDir "$outputBaseName.exe"
+if (-not (Test-Path -LiteralPath $setupPath)) {
+    throw "Installer was not created: $setupPath"
+}
 
 Write-Host "Installer built at $setupPath"
