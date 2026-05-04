@@ -18,6 +18,7 @@ APP_LOG_PREFIX="${APP_LOG_PREFIX:-$APP_NAME}"
 APP_DIR="$BUILD_DIR/$APP_NAME.app"
 BIN_DIR="$APP_DIR/Contents/MacOS"
 RES_DIR="$APP_DIR/Contents/Resources"
+SOURCE_RES_DIR="$ROOT_DIR/Resources"
 GENERATED_SWIFT="$BUILD_DIR/AppIdentity.generated.swift"
 SWIFT_FILES=("$ROOT_DIR"/Sources/**/*.swift(.N))
 
@@ -28,6 +29,10 @@ fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$BIN_DIR" "$RES_DIR"
+
+if [[ -d "$SOURCE_RES_DIR" ]]; then
+  cp -R "$SOURCE_RES_DIR"/. "$RES_DIR"/
+fi
 
 cat > "$GENERATED_SWIFT" <<EOF
 import Foundation
