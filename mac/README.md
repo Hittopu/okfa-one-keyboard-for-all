@@ -163,3 +163,14 @@ Shortcut configuration is persisted locally.
 ### Feedback
 
 If you run into any issues while using `okfa`, please open an issue.
+
+
+### ??
+
+?????????? `okfa`???? GitHub `Releases` ???? macOS ????
+?????? `.dmg` ???
+
+### Download
+
+If you only want to use `okfa`, prefer downloading the macOS release package from GitHub `Releases`.
+The recommended format is the `.dmg` build.
