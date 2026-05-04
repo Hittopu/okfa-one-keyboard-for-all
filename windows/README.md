@@ -118,9 +118,19 @@ If you run into any issues while using `okfa`, please open an issue.
 ### ??
 
 ?????????? `okfa`???? GitHub `Releases` ???? Windows ????
-?????? `okfa-windows-v0.1.exe`?
+?????? `okfa-windows-v0.1.2-setup.exe`?
 
 ### Download
 
 If you only want to use `okfa`, prefer downloading the Windows release package from GitHub `Releases`.
-The recommended asset is `okfa-windows-v0.1.exe`.
+The recommended asset is `okfa-windows-v0.1.2-setup.exe`.
+
+
+### Installer
+
+```powershell
+cd windows\installer
+powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
+```
+
+This produces a Windows installer executable under `windows/installer/dist/`.
