@@ -4,6 +4,9 @@
 
 这是 `okfa` 的 Windows 端工程。
 
+当前公开版本主要服务于 `Mac -> Windows` 的连接路径。  
+`Windows -> Windows` 版本会在后续更新中补充。
+
 当前职责：
 
 - 扫描 Mac 端暴露的自定义 BLE GATT 服务
@@ -58,6 +61,9 @@ dotnet run
 
 This is the Windows side of `okfa`.
 
+The current public version is mainly focused on the `Mac -> Windows` workflow.  
+`Windows -> Windows` support will be added in a later update.
+
 Current responsibilities:
 
 - scan for the custom BLE GATT service exposed by the Mac app
@@ -107,3 +113,14 @@ This is not the standard Bluetooth keyboard pairing flow from the Windows Settin
 ### Feedback
 
 If you run into any issues while using `okfa`, please open an issue.
+
+
+### ??
+
+?????????? `okfa`???? GitHub `Releases` ???? Windows ????
+?????? `okfa-windows-v0.1.exe`?
+
+### Download
+
+If you only want to use `okfa`, prefer downloading the Windows release package from GitHub `Releases`.
+The recommended asset is `okfa-windows-v0.1.exe`.
