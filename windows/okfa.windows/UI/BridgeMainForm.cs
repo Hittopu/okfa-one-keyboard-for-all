@@ -9,7 +9,7 @@ namespace KeyboardBridge.Windows.UI;
 public sealed class BridgeMainForm : Form
 {
     private readonly BridgeScanner _scanner = new();
-    private readonly TrustedMacStore _trustedMacStore = new();
+    private readonly TrustedSenderStore _trustedSenderStore = new();
     private readonly InputInjector _inputInjector = new();
     private readonly Dictionary<ulong, BridgeAdvertisement> _discoveredDevices = new();
 
@@ -20,11 +20,13 @@ public sealed class BridgeMainForm : Form
     private bool _isConnecting;
     private bool _isRemoteInputLive;
     private TrustStatusCode? _trustStatus;
+    private string? _connectionProgress;
+    private string? _lastConnectionError;
     private PrimaryAction _primaryAction = PrimaryAction.None;
     private SecondaryAction _secondaryAction = SecondaryAction.None;
 
     private readonly Panel _surfacePanel = new();
-    private readonly PictureBox _logoPictureBox = new();
+    private readonly BridgeStatusBadge _statusBadge = new();
     private readonly Label _brandLabel = new();
     private readonly Label _headlineLabel = new();
     private readonly Label _messageLabel = new();
@@ -36,7 +38,7 @@ public sealed class BridgeMainForm : Form
 
     public BridgeMainForm()
     {
-        Text = "okfa";
+        Text = "okfa Receiver";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(760, 600);
         ClientSize = new Size(820, 640);
@@ -49,7 +51,6 @@ public sealed class BridgeMainForm : Form
         _inputInjector.IsEnabled = true;
         _scanner.DeviceFound += OnDeviceFound;
 
-        LoadBrandAssets();
         BuildLayout();
         RefreshUi();
     }
@@ -58,7 +59,6 @@ public sealed class BridgeMainForm : Form
     {
         base.OnHandleCreated(e);
         BridgeTheme.TryApplyWindowBackdrop(this);
-        ApplyWindowIcon();
     }
 
     protected override void OnShown(EventArgs e)
@@ -133,11 +133,10 @@ public sealed class BridgeMainForm : Form
         _brandLabel.Margin = new Padding(0, 0, 0, 12);
         _brandLabel.Text = "okfa";
 
-        _logoPictureBox.Size = new Size(52, 52);
-        _logoPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
-        _logoPictureBox.Anchor = AnchorStyles.None;
-        _logoPictureBox.Margin = new Padding(0, 0, 0, 18);
-        _logoPictureBox.BackColor = Color.Transparent;
+        _statusBadge.Size = new Size(52, 52);
+        _statusBadge.Anchor = AnchorStyles.None;
+        _statusBadge.Margin = new Padding(0, 0, 0, 18);
+        _statusBadge.Apply(BridgeBadgeKind.Waves, BridgeTheme.AccentBlue);
 
         _headlineLabel.AutoSize = true;
         _headlineLabel.Font = new Font("Segoe UI Variable Display", 32f, FontStyle.Bold, GraphicsUnit.Point);
@@ -161,7 +160,7 @@ public sealed class BridgeMainForm : Form
         _deviceCaptionLabel.TextAlign = ContentAlignment.MiddleCenter;
         _deviceCaptionLabel.Anchor = AnchorStyles.None;
         _deviceCaptionLabel.Margin = new Padding(0, 0, 0, 8);
-        _deviceCaptionLabel.Text = "Selected Mac";
+        _deviceCaptionLabel.Text = "Sender PC";
 
         _deviceLabel.AutoSize = false;
         _deviceLabel.Width = 420;
@@ -195,7 +194,7 @@ public sealed class BridgeMainForm : Form
         _buttonRow.Controls.Add(_secondaryButton);
 
         content.Controls.Add(_brandLabel, 0, 0);
-        content.Controls.Add(_logoPictureBox, 0, 1);
+        content.Controls.Add(_statusBadge, 0, 1);
         content.Controls.Add(_headlineLabel, 0, 2);
         content.Controls.Add(_messageLabel, 0, 3);
         content.Controls.Add(_deviceCaptionLabel, 0, 4);
@@ -276,6 +275,8 @@ public sealed class BridgeMainForm : Form
         }
 
         _discoveredDevices.Clear();
+        _lastConnectionError = null;
+        _connectionProgress = null;
         if (_session is null)
         {
             _selectedBluetoothAddress = null;
@@ -319,12 +320,23 @@ public sealed class BridgeMainForm : Form
 
         _isConnecting = true;
         _trustStatus = null;
+        _lastConnectionError = null;
+        _connectionProgress = "Opening Bluetooth connection...";
         _isRemoteInputLive = false;
         StopScanning();
         RefreshUi();
 
         var session = new BridgeSession();
         _session = session;
+
+        session.LogEmitted += (_, message) => RunOnUi(() =>
+        {
+            _connectionProgress = message;
+            if (_isConnecting)
+            {
+                RefreshUi();
+            }
+        });
 
         session.TrustStatusReceived += (_, status) => RunOnUi(() =>
         {
@@ -342,6 +354,7 @@ public sealed class BridgeMainForm : Form
                 _inputInjector.ReleaseAllInjectedKeys();
             }
         });
+        session.ReleaseAllReceived += (_, _) => _inputInjector.ReleaseAllInjectedKeys();
 
         session.SnapshotReceived += (_, snapshot) =>
         {
@@ -359,7 +372,7 @@ public sealed class BridgeMainForm : Form
         try
         {
             await session.ConnectAsync(advertisement.BluetoothAddress);
-            await session.SendClientHelloAsync(_trustedMacStore.ClientId, clientVersion: 1, capabilityFlags: 0);
+            await session.SendClientHelloAsync(_trustedSenderStore.ClientId, clientVersion: 1, capabilityFlags: 0);
 
             RunOnUi(() =>
             {
@@ -372,6 +385,12 @@ public sealed class BridgeMainForm : Form
         {
             BridgeLog.WriteException("BridgeMainForm", exception);
             await DisconnectAsync(restartScanning: true);
+            RunOnUi(() =>
+            {
+                _lastConnectionError = exception.Message;
+                _connectionProgress = null;
+                RefreshUi();
+            });
         }
         finally
         {
@@ -398,6 +417,7 @@ public sealed class BridgeMainForm : Form
         _connectedAdvertisement = null;
         _isRemoteInputLive = false;
         _trustStatus = null;
+        _connectionProgress = null;
 
         if (restartScanning)
         {
@@ -463,6 +483,7 @@ public sealed class BridgeMainForm : Form
 
         _headlineLabel.Text = state.Headline;
         _messageLabel.Text = state.Message;
+        _statusBadge.Apply(state.BadgeKind, state.BadgeColor);
 
         _deviceCaptionLabel.Visible = state.DeviceText is not null;
         _deviceLabel.Visible = state.DeviceText is not null;
@@ -481,37 +502,6 @@ public sealed class BridgeMainForm : Form
         _buttonRow.Visible = state.ShowPrimary || state.ShowSecondary;
     }
 
-    private void LoadBrandAssets()
-    {
-        var assetRoot = Path.Combine(AppContext.BaseDirectory, "Assets");
-        var logoPath = Path.Combine(assetRoot, "okfa_logo.png");
-
-        if (File.Exists(logoPath))
-        {
-            using var stream = File.OpenRead(logoPath);
-            _logoPictureBox.Image = Image.FromStream(stream);
-        }
-    }
-
-    private void ApplyWindowIcon()
-    {
-        var assetRoot = Path.Combine(AppContext.BaseDirectory, "Assets");
-        var iconPath = Path.Combine(assetRoot, "okfa.ico");
-
-        if (File.Exists(iconPath))
-        {
-            using var iconStream = File.OpenRead(iconPath);
-            Icon = new Icon(iconStream);
-            return;
-        }
-
-        var embeddedIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        if (embeddedIcon is not null)
-        {
-            Icon = embeddedIcon;
-        }
-    }
-
     private VisualState ComputeState()
     {
         var selectedAdvertisement = SelectedAdvertisement();
@@ -523,7 +513,7 @@ public sealed class BridgeMainForm : Form
             {
                 return new VisualState(
                     "Access denied",
-                    "Approve this PC on your Mac, then reconnect.",
+                    "Approve this receiver PC on the sender, then reconnect.",
                     _connectedAdvertisement.LocalName,
                     BridgeBadgeKind.Warning,
                     BridgeTheme.WarningOrange,
@@ -541,8 +531,8 @@ public sealed class BridgeMainForm : Form
             if (_trustStatus == TrustStatusCode.Pending)
             {
                 return new VisualState(
-                    "Approve on Mac",
-                    "A nearby Mac needs your approval before it can type here.",
+                    "Approve on sender PC",
+                    "Approve this receiver on the sender PC before input can be shared.",
                     _connectedAdvertisement.LocalName,
                     BridgeBadgeKind.Question,
                     BridgeTheme.WarningOrange,
@@ -561,7 +551,7 @@ public sealed class BridgeMainForm : Form
             {
                 return new VisualState(
                     "Connected",
-                    "Keyboard input is currently routed to Windows.",
+                    "Keyboard input is currently routed to this receiver PC.",
                     _connectedAdvertisement.LocalName,
                     BridgeBadgeKind.Check,
                     BridgeTheme.SuccessGreen,
@@ -578,7 +568,7 @@ public sealed class BridgeMainForm : Form
 
             return new VisualState(
                 "Ready",
-                "Press Connect on Mac to hand over the keyboard.",
+                    "Use the sender PC to start sharing the keyboard.",
                 _connectedAdvertisement.LocalName,
                 BridgeBadgeKind.Link,
                 BridgeTheme.AccentBlue,
@@ -597,9 +587,10 @@ public sealed class BridgeMainForm : Form
         {
             return new VisualState(
                 "Connecting",
-                selectedAdvertisement is null
-                    ? "Starting a secure link."
-                    : $"Starting a secure link to {selectedAdvertisement.LocalName}.",
+                _connectionProgress
+                    ?? (selectedAdvertisement is null
+                        ? "Starting a secure link."
+                        : $"Starting a secure link to {selectedAdvertisement.LocalName}."),
                 selectedAdvertisement?.LocalName,
                 BridgeBadgeKind.Link,
                 BridgeTheme.AccentBlue,
@@ -614,11 +605,30 @@ public sealed class BridgeMainForm : Form
             );
         }
 
+        if (_lastConnectionError is not null)
+        {
+            return new VisualState(
+                "Connection failed",
+                _lastConnectionError,
+                selectedAdvertisement?.LocalName,
+                BridgeBadgeKind.Warning,
+                BridgeTheme.WarningOrange,
+                true,
+                "Connect",
+                selectedAdvertisement is not null,
+                PrimaryAction.Connect,
+                true,
+                "Refresh",
+                true,
+                SecondaryAction.Rescan
+            );
+        }
+
         if (selectedAdvertisement is not null)
         {
             return new VisualState(
                 "Ready to connect",
-                "Use the selected Mac below, then press Connect.",
+                "Use the selected sender PC below, then press Connect.",
                 selectedAdvertisement.LocalName,
                 selectedAdvertisement.HasTargetService ? BridgeBadgeKind.Link : BridgeBadgeKind.Waves,
                 BridgeTheme.AccentBlue,
@@ -627,7 +637,7 @@ public sealed class BridgeMainForm : Form
                 true,
                 PrimaryAction.Connect,
                 true,
-                deviceCount > 1 ? "Choose Mac" : "Refresh",
+                deviceCount > 1 ? "Choose Sender" : "Refresh",
                 true,
                 deviceCount > 1 ? SecondaryAction.ChooseDevice : SecondaryAction.Rescan
             );
@@ -636,8 +646,8 @@ public sealed class BridgeMainForm : Form
         if (_isScanning)
         {
             return new VisualState(
-                "Looking for Mac",
-                "Keep the Mac app open and nearby.",
+                "Looking for sender PC",
+                "Keep the okfa sender app open and nearby.",
                 null,
                 BridgeBadgeKind.Waves,
                 BridgeTheme.AccentBlue,
@@ -653,8 +663,8 @@ public sealed class BridgeMainForm : Form
         }
 
         return new VisualState(
-            "No Macs nearby",
-            "Open the Mac app, then try again.",
+            "No sender PCs nearby",
+            "Open the sender app, then try again.",
             null,
             BridgeBadgeKind.Off,
             BridgeTheme.TextSecondary,

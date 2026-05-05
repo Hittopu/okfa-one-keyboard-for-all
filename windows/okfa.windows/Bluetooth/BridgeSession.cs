@@ -8,6 +8,7 @@ namespace KeyboardBridge.Windows.Bluetooth;
 
 public sealed class BridgeSession : IAsyncDisposable
 {
+    private static readonly TimeSpan BluetoothOperationTimeout = TimeSpan.FromSeconds(15);
     private BluetoothLEDevice? _device;
     private GattDeviceService? _service;
     private GattCharacteristic? _controlCharacteristic;
@@ -18,42 +19,66 @@ public sealed class BridgeSession : IAsyncDisposable
     public event EventHandler<string>? LogEmitted;
     public event EventHandler<TrustStatusMessage>? TrustStatusReceived;
     public event EventHandler<ModeChangeMessage>? ModeChangeReceived;
+    public event EventHandler<ReleaseAllMessage>? ReleaseAllReceived;
     public event EventHandler<InputEventMessage>? InputEventReceived;
     public event EventHandler<KeyboardSnapshotMessage>? SnapshotReceived;
 
     public async Task ConnectAsync(ulong bluetoothAddress)
     {
-        _device = await BluetoothLEDevice.FromBluetoothAddressAsync(bluetoothAddress);
+        Log($"Opening BluetoothLEDevice address=0x{bluetoothAddress:X}...");
+        _device = await WithTimeout(
+            async () => await BluetoothLEDevice.FromBluetoothAddressAsync(bluetoothAddress),
+            "open Bluetooth device"
+        );
         if (_device is null)
         {
             throw new InvalidOperationException("BluetoothLEDevice.FromBluetoothAddressAsync returned null.");
         }
 
-        var serviceResult = await _device.GetGattServicesForUuidAsync(BridgeUuids.Service, BluetoothCacheMode.Uncached);
+        Log("Discovering okfa GATT service...");
+        var serviceResult = await WithTimeout(
+            async () => await _device.GetGattServicesForUuidAsync(BridgeUuids.Service, BluetoothCacheMode.Uncached),
+            "discover okfa service"
+        );
         if (serviceResult.Status != GattCommunicationStatus.Success)
         {
             throw new InvalidOperationException($"Service discovery failed with status {serviceResult.Status}.");
         }
 
         _service = serviceResult.Services.FirstOrDefault()
-            ?? throw new InvalidOperationException("KeyboardBridge service was not found.");
+            ?? throw new InvalidOperationException("okfa service was not found.");
 
+        Log("Resolving Control characteristic...");
         _controlCharacteristic = await ResolveCharacteristicAsync(BridgeUuids.Control);
+        Log("Resolving InputEvent characteristic...");
         _inputEventCharacteristic = await ResolveCharacteristicAsync(BridgeUuids.InputEvent);
+        Log("Resolving InputSnapshot characteristic...");
         _inputSnapshotCharacteristic = await ResolveCharacteristicAsync(BridgeUuids.InputSnapshot);
 
         _controlCharacteristic.ValueChanged += OnControlValueChanged;
         _inputEventCharacteristic.ValueChanged += OnInputEventValueChanged;
         _inputSnapshotCharacteristic.ValueChanged += OnSnapshotValueChanged;
 
-        var controlNotifyStatus = await _controlCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
-            GattClientCharacteristicConfigurationDescriptorValue.Notify
+        Log("Subscribing to Control notifications...");
+        var controlNotifyStatus = await WithTimeout(
+            async () => await _controlCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                GattClientCharacteristicConfigurationDescriptorValue.Notify
+            ),
+            "subscribe Control notifications"
         );
-        var inputNotifyStatus = await _inputEventCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
-            GattClientCharacteristicConfigurationDescriptorValue.Notify
+        Log("Subscribing to InputEvent notifications...");
+        var inputNotifyStatus = await WithTimeout(
+            async () => await _inputEventCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                GattClientCharacteristicConfigurationDescriptorValue.Notify
+            ),
+            "subscribe InputEvent notifications"
         );
-        var snapshotNotifyStatus = await _inputSnapshotCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
-            GattClientCharacteristicConfigurationDescriptorValue.Notify
+        Log("Subscribing to InputSnapshot notifications...");
+        var snapshotNotifyStatus = await WithTimeout(
+            async () => await _inputSnapshotCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(
+                GattClientCharacteristicConfigurationDescriptorValue.Notify
+            ),
+            "subscribe InputSnapshot notifications"
         );
 
         Log(
@@ -72,7 +97,11 @@ public sealed class BridgeSession : IAsyncDisposable
         var writer = new DataWriter();
         writer.WriteBytes(payload);
 
-        var status = await _controlCharacteristic.WriteValueAsync(writer.DetachBuffer(), GattWriteOption.WriteWithResponse);
+        Log($"Sending ClientHello clientId=0x{clientId:X16}...");
+        var status = await WithTimeout(
+            async () => await _controlCharacteristic.WriteValueAsync(writer.DetachBuffer(), GattWriteOption.WriteWithResponse),
+            "send ClientHello"
+        );
         Log($"Sent ClientHello clientId=0x{clientId:X16} status={status}");
     }
 
@@ -112,7 +141,10 @@ public sealed class BridgeSession : IAsyncDisposable
             throw new InvalidOperationException("Service is not ready.");
         }
 
-        var result = await _service.GetCharacteristicsForUuidAsync(uuid, BluetoothCacheMode.Uncached);
+        var result = await WithTimeout(
+            async () => await _service.GetCharacteristicsForUuidAsync(uuid, BluetoothCacheMode.Uncached),
+            $"discover characteristic {uuid}"
+        );
         if (result.Status != GattCommunicationStatus.Success)
         {
             throw new InvalidOperationException($"Characteristic discovery for {uuid} failed with status {result.Status}.");
@@ -137,6 +169,13 @@ public sealed class BridgeSession : IAsyncDisposable
         {
             Log($"Received ModeChange mode={modeChange.Mode} source={modeChange.Source}");
             ModeChangeReceived?.Invoke(this, modeChange);
+            return;
+        }
+
+        if (ControlMessageCodec.TryDecodeReleaseAll(payload, out var releaseAll))
+        {
+            Log($"Received ReleaseAll sequence={releaseAll.Sequence}");
+            ReleaseAllReceived?.Invoke(this, releaseAll);
             return;
         }
 
@@ -197,5 +236,17 @@ public sealed class BridgeSession : IAsyncDisposable
     {
         BridgeLog.Write("BridgeSession", message);
         LogEmitted?.Invoke(this, message);
+    }
+
+    private static async Task<T> WithTimeout<T>(Func<Task<T>> operation, string label)
+    {
+        var task = operation();
+        var completed = await Task.WhenAny(task, Task.Delay(BluetoothOperationTimeout));
+        if (completed != task)
+        {
+            throw new TimeoutException($"{label} timed out after {BluetoothOperationTimeout.TotalSeconds:0}s.");
+        }
+
+        return await task;
     }
 }

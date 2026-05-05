@@ -1,236 +1,203 @@
-# okfa — one keyboard for all
+# okfa - one keyboard for all
 
 ## 中文
 
-`okfa` 是一个跨设备键盘接管工具。  
-它解决的是这样一个高频桌面场景：你正在用一台笔记本工作，但偶尔需要临时控制另一台电脑，不想再把手移到另一把键盘上。
+`okfa` 是一个跨设备键盘接管工具。它让一台电脑的键盘可以在需要时切换到另一台电脑上使用，适合工位上同时使用笔记本和台式机、但不想频繁更换键盘的场景。
 
-`okfa` 通过一个轻量的双端应用，让一套键盘在两台设备之间快速切换。
+当前公开版本提供两条链路：
 
-### 当前支持
-
-- `Mac -> Windows`
-
-当前公开版本主要聚焦 `Mac -> Windows` 的稳定体验。  
-`Windows -> Windows` 版本会在后续更新中补充。
-
-### 核心能力
-
-- 可信 BLE 会话建立
-- 远程键盘事件传输
-- Windows 本地输入注入
-- 远程输入模式切换
-- 面向桌面环境的轻量状态 UI
-
-### 技术路线
-
-`okfa` 不是标准蓝牙 HID 键盘配对流程。  
-它采用的是自定义 BLE GATT 应用层协议：
-
-1. Mac 端发布自定义 BLE GATT 服务
-2. Windows 端扫描并建立可信连接
-3. Mac 端进入远程模式后捕获键盘输入
-4. Windows 端接收事件并通过本地输入路径注入到前台窗口
-
-这条路线的重点不是“模拟一把标准蓝牙键盘”，而是提供一个更可控、更适合桌面工作流的键盘接管方案。
+- `Windows -> Windows`：Windows 发送端捕获本机键盘，通过自定义 BLE GATT 服务发送输入事件，Windows 接收端注入为真实键盘输入。
+- `Mac -> Windows`：macOS 端发布同一套 okfa BLE GATT 协议，Windows 端负责连接、信任确认和输入注入。
 
 ### 下载
 
-如果你只是想直接使用 `okfa`，优先从 GitHub Releases 下载发布包：
+请从 GitHub Releases 下载正式发布包：
 
-- Releases: [v0.1.2](https://github.com/Hittopu/okfa-one-keyboard-for-all/releases/tag/v0.1.2)
+- Releases: https://github.com/Hittopu/okfa-one-keyboard-for-all/releases
+- Windows -> Windows v0.2.0: `okfa-win2win-v0.2.0-setup.exe`
 
-当前发布物：
+Windows installer 是自包含安装包，普通用户不需要单独安装 .NET。安装后开始菜单会出现两个入口：
 
-- macOS: `okfa-macos-v0.1.2.dmg`
-- Windows: `okfa-windows-v0.1.2-setup.exe`
+- `okfa Receiver`：安装在被控制的 Windows 电脑上。
+- `okfa Sender`：安装在键盘所在的 Windows 电脑上。
 
-如果你需要自行构建，请查看下面的源码结构和平台说明。
+GitHub release 会自动生成对应 tag 的 source code 压缩包，源码与 release 资产保持同一版本。
 
-### 使用方式
+### Windows -> Windows 使用方式
 
-1. 打开 Mac 端应用
-2. 打开 Windows 端应用
-3. 在 Windows 端扫描并连接 Mac
-4. 如果 Mac 端出现信任或批准提示，完成批准
-5. 在 Mac 端进入远程输入模式
-6. 开始使用一套键盘控制 Windows
+1. 在被控制的电脑上打开 `okfa Receiver`。
+2. 在键盘所在的电脑上打开 `okfa Sender`。
+3. 在 `okfa Receiver` 中选择发现到的 sender PC 并连接。
+4. 在 `okfa Sender` 中批准 receiver PC。
+5. 点击 `Share Keyboard`，或按 `Ctrl + Alt + F9`，把键盘切换到接收端。
+6. 再按 `Ctrl + Alt + F9` 回到本机输入。
+7. 如需应急退出，按 `Ctrl + Alt + F10` 释放远程输入。
 
-### 仓库结构
+### Mac -> Windows 使用方式
 
-- [`mac/`](./mac)：macOS 端源码
-- [`windows/`](./windows)：Windows 端源码
-- [`docs/`](./docs)：设计与架构文档
-- [`assets/branding/`](./assets/branding)：统一品牌资源
-- [`archive/`](./archive)：历史原型与旧快照
+1. 在 macOS 上打开 `okfa.app`。
+2. 授予 Bluetooth、Accessibility、Input Monitoring 权限。
+3. 在 Windows 上打开 `okfa Receiver`。
+4. 在 Windows 端连接 Mac，并在 Mac 端批准。
+5. 使用 macOS 端快捷键切换远程输入。
+
+### 技术架构
+
+okfa 使用应用层 BLE GATT 协议传输键盘事件，而不是依赖系统蓝牙设置中的标准键盘配对流程。核心链路包括：
+
+- BLE discovery：接收端扫描 okfa service UUID 和 okfa 广播名。
+- Trust handshake：接收端发送 `ClientHello`，发送端返回 `TrustStatus`。
+- Remote mode：发送端通过 `ModeChange` 控制远程输入状态。
+- Input stream：按键事件通过 `InputEvent` notify 发送。
+- Recovery：断开或异常时通过 `ReleaseAll` 和 snapshot 释放粘滞按键。
 
 ### 构建
 
-#### macOS
+Windows app：
 
-见 [`mac/README.md`](./mac/README.md)
+```powershell
+cd windows\okfa.windows
+dotnet build
+```
+
+Windows installer：
+
+```powershell
+.\windows\installer\build-installer.ps1
+```
+
+macOS app：
 
 ```bash
 cd mac
 ./build_mac_phase1.sh
 ```
 
-#### Windows
+### 仓库结构
 
-见 [`windows/README.md`](./windows/README.md)
-
-```powershell
-cd windows\okfa.windows
-dotnet build
-dotnet run
+```text
+assets/branding/                 shared logo and brand assets
+docs/                            protocol and design notes
+mac/                             macOS sender app
+windows/okfa.windows/            Windows receiver and sender app
+windows/installer/               Windows installer build scripts
 ```
-
-### 权限
-
-Mac 端需要：
-
-- Bluetooth
-- Accessibility
-- Input Monitoring
-
-Windows 端在控制提升权限窗口时，可能也需要以管理员权限运行。
 
 ### 反馈
 
-如果你在使用过程中遇到问题，欢迎提交 issue：
+如果你在使用过程中遇到问题，欢迎在 GitHub Issues 里提交复现步骤、系统版本、蓝牙适配器型号和本地日志。
 
-- Issues: [github.com/Hittopu/okfa-one-keyboard-for-all/issues](https://github.com/Hittopu/okfa-one-keyboard-for-all/issues)
+Windows 日志位置：
 
-### 品牌
+```powershell
+Get-Content "$env:LOCALAPPDATA\okfa\bridge.log" -Tail 120
+```
 
-项目品牌为：
+macOS 日志位置：
 
-- `okfa`
-- `one keyboard for all`
-
-推荐的 GitHub 仓库名：
-
-- `okfa-one-keyboard-for-all`
-
-### 许可证
-
-本项目使用 MIT License，见 [`LICENSE`](./LICENSE)。
-
----
+```text
+~/Library/Logs/okfa.log
+```
 
 ## English
 
-`okfa` is a cross-device keyboard handoff tool.  
-It is built for a common desk workflow: you work on one laptop, but occasionally need to control another computer without reaching for a second keyboard.
+`okfa` is a cross-device keyboard handoff tool. It lets one computer temporarily drive another computer with the same physical keyboard, which is useful for desk setups with both a laptop and a desktop PC.
 
-`okfa` uses a lightweight two-end application model to hand one keyboard between two machines quickly.
+The current public codebase supports two paths:
 
-### Current support
-
-- `Mac -> Windows`
-
-The current public version is focused on a stable `Mac -> Windows` workflow.  
-`Windows -> Windows` support will be added in a later update.
-
-### Core capabilities
-
-- trusted BLE session establishment
-- remote keyboard event delivery
-- local Windows input injection
-- remote input mode switching
-- lightweight desktop status UI
-
-### Technical approach
-
-`okfa` is not a standard Bluetooth HID keyboard pairing flow.  
-It uses a custom BLE GATT application-layer protocol:
-
-1. the Mac app publishes a custom BLE GATT service
-2. the Windows app scans for it and establishes a trusted connection
-3. the Mac app captures keyboard input when remote mode is enabled
-4. the Windows app receives those events and injects them into the active foreground target
-
-The goal is not to imitate a generic Bluetooth keyboard.  
-The goal is to provide a more controllable keyboard handoff workflow for real desktop use.
+- `Windows -> Windows`: the sender PC captures local keyboard events, publishes a custom BLE GATT service, and the receiver PC injects those events as real keyboard input.
+- `Mac -> Windows`: the macOS app publishes the same okfa BLE GATT protocol, while the Windows app handles discovery, trust approval, and input injection.
 
 ### Download
 
-If you only want to use `okfa`, prefer downloading the release artifacts from GitHub Releases:
+Download packaged builds from GitHub Releases:
 
-- Releases: [v0.1.2](https://github.com/Hittopu/okfa-one-keyboard-for-all/releases/tag/v0.1.2)
+- Releases: https://github.com/Hittopu/okfa-one-keyboard-for-all/releases
+- Windows -> Windows v0.2.0: `okfa-win2win-v0.2.0-setup.exe`
 
-Current release assets:
+The Windows installer is self-contained, so end users do not need to install .NET separately. After installation, the Start Menu contains:
 
-- macOS: `okfa-macos-v0.1.2.dmg`
-- Windows: `okfa-windows-v0.1.2-setup.exe`
+- `okfa Receiver`: run this on the Windows PC being controlled.
+- `okfa Sender`: run this on the Windows PC with the keyboard.
 
-If you want to build from source, see the repository layout and platform-specific READMEs below.
+GitHub automatically generates source code archives for each release tag, so the release assets and source snapshot point to the same version.
 
-### Usage
+### Windows -> Windows Usage
 
-1. Open the Mac app
-2. Open the Windows app
-3. Scan for and connect to the Mac from Windows
-4. If the Mac asks for trust or approval, approve it
-5. Enable remote input mode on the Mac
-6. Start using one keyboard to control Windows
+1. Open `okfa Receiver` on the PC you want to control.
+2. Open `okfa Sender` on the PC with the keyboard.
+3. Select the discovered sender PC in `okfa Receiver` and connect.
+4. Approve the receiver PC in `okfa Sender`.
+5. Click `Share Keyboard`, or press `Ctrl + Alt + F9`, to hand the keyboard over.
+6. Press `Ctrl + Alt + F9` again to return keyboard input to the sender PC.
+7. Press `Ctrl + Alt + F10` for emergency stop and key release.
 
-### Repository layout
+### Mac -> Windows Usage
 
-- [`mac/`](./mac): macOS app source
-- [`windows/`](./windows): Windows app source
-- [`docs/`](./docs): design and architecture notes
-- [`assets/branding/`](./assets/branding): shared brand assets
-- [`archive/`](./archive): historical prototypes and snapshots
+1. Open `okfa.app` on macOS.
+2. Grant Bluetooth, Accessibility, and Input Monitoring permissions.
+3. Open `okfa Receiver` on Windows.
+4. Connect to the Mac from Windows and approve the Windows client on macOS.
+5. Use the macOS shortcut to switch remote input mode.
+
+### Architecture
+
+okfa transports keyboard events with an application-layer BLE GATT protocol. The main flow is:
+
+- BLE discovery: receiver scans for the okfa service UUID and local name.
+- Trust handshake: receiver sends `ClientHello`, sender replies with `TrustStatus`.
+- Remote mode: sender controls remote input with `ModeChange`.
+- Input stream: keyboard events are delivered through `InputEvent` notifications.
+- Recovery: disconnects and emergency stops use `ReleaseAll` and snapshots to release pressed keys.
 
 ### Build
 
-#### macOS
+Windows app:
 
-See [`mac/README.md`](./mac/README.md)
+```powershell
+cd windows\okfa.windows
+dotnet build
+```
+
+Windows installer:
+
+```powershell
+.\windows\installer\build-installer.ps1
+```
+
+macOS app:
 
 ```bash
 cd mac
 ./build_mac_phase1.sh
 ```
 
-#### Windows
+### Repository Layout
 
-See [`windows/README.md`](./windows/README.md)
-
-```powershell
-cd windows\okfa.windows
-dotnet build
-dotnet run
+```text
+assets/branding/                 shared logo and brand assets
+docs/                            protocol and design notes
+mac/                             macOS sender app
+windows/okfa.windows/            Windows receiver and sender app
+windows/installer/               Windows installer build scripts
 ```
-
-### Permissions
-
-The Mac app requires:
-
-- Bluetooth
-- Accessibility
-- Input Monitoring
-
-The Windows app may need to run elevated if you want it to control elevated target windows reliably.
 
 ### Feedback
 
-If you run into any issues while using `okfa`, please open an issue:
+If you run into issues, please open a GitHub issue with reproduction steps, OS version, Bluetooth adapter model, and logs.
 
-- Issues: [github.com/Hittopu/okfa-one-keyboard-for-all/issues](https://github.com/Hittopu/okfa-one-keyboard-for-all/issues)
+Windows log:
 
-### Branding
+```powershell
+Get-Content "$env:LOCALAPPDATA\okfa\bridge.log" -Tail 120
+```
 
-The project branding is:
+macOS log:
 
-- `okfa`
-- `one keyboard for all`
+```text
+~/Library/Logs/okfa.log
+```
 
-Recommended GitHub repository name:
+## License
 
-- `okfa-one-keyboard-for-all`
-
-### License
-
-This project is released under the MIT License. See [`LICENSE`](./LICENSE).
+MIT License. See `LICENSE`.

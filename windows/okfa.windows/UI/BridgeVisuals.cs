@@ -41,6 +41,7 @@ internal static class BridgeTheme
     public static readonly Color DangerRed = Color.FromArgb(216, 92, 80);
     public static readonly Color SecondaryButtonFill = Color.FromArgb(250, 251, 253);
     public static readonly Color SecondaryButtonBorder = Color.FromArgb(205, 212, 224);
+    private static readonly Lazy<Image?> SharedLogoImage = new(LoadSharedLogoImage);
 
     public static Font CreateDisplayFont(float size, FontStyle style = FontStyle.Bold)
     {
@@ -64,6 +65,8 @@ internal static class BridgeTheme
         path.CloseFigure();
         return path;
     }
+
+    public static Image? GetSharedLogoImage() => SharedLogoImage.Value;
 
     public static void PaintWindowBackground(Graphics graphics, Rectangle bounds)
     {
@@ -113,6 +116,25 @@ internal static class BridgeTheme
     {
         using var fonts = new InstalledFontCollection();
         return fonts.Families.Any(family => family.Name.Equals(familyName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static Image? LoadSharedLogoImage()
+    {
+        try
+        {
+            var imagePath = Path.Combine(AppContext.BaseDirectory, "Assets", "okfa_logo.png");
+            if (!File.Exists(imagePath))
+            {
+                return null;
+            }
+
+            using var source = Image.FromFile(imagePath);
+            return new Bitmap(source);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void PaintGlow(Graphics graphics, Rectangle bounds, Color color)
@@ -223,13 +245,22 @@ internal sealed class BridgeStatusBadge : Control
 
         var badgeRect = Rectangle.FromLTRB(0, 0, Width - 1, Height - 1);
         using var badgePath = BridgeTheme.CreateRoundedPath(badgeRect, 10);
-        using var fillBrush = new SolidBrush(_accentColor);
-        using var borderPen = new Pen(Color.FromArgb(30, 255, 255, 255), 1f);
+        var logoImage = BridgeTheme.GetSharedLogoImage();
+        using var fillBrush = new SolidBrush(logoImage is null ? _accentColor : Color.White);
+        using var borderPen = new Pen(logoImage is null ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(150, _accentColor), 1.25f);
 
         e.Graphics.FillPath(fillBrush, badgePath);
         e.Graphics.DrawPath(borderPen, badgePath);
 
-        DrawBrandMark(e.Graphics, badgeRect);
+        if (logoImage is null)
+        {
+            DrawBrandMark(e.Graphics, badgeRect);
+            return;
+        }
+
+        e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        var logoBounds = Rectangle.Inflate(badgeRect, -5, -5);
+        e.Graphics.DrawImage(logoImage, logoBounds);
     }
 
     private static void DrawBrandMark(Graphics graphics, Rectangle bounds)

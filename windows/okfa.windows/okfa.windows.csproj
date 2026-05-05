@@ -4,19 +4,18 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\okfa.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>okfa</AssemblyName>
+    <Version>0.2.0</Version>
+    <Product>okfa</Product>
+    <Company>okfa</Company>
     <RootNamespace>KeyboardBridge.Windows</RootNamespace>
-    <ApplicationIcon>Assets\okfa.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\okfa.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Assets\okfa_logo.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <Content Include="Assets\okfa.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\okfa_logo.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -32,6 +32,14 @@ public enum TrustStatusCode : byte
     Denied = 2,
 }
 
+public enum TrustReason : byte
+{
+    UnknownClient = 1,
+    UserApproved = 2,
+    UserDenied = 3,
+    AutoTrusted = 4,
+}
+
 public enum RemoteInputMode : byte
 {
     Idle = 0,
@@ -64,6 +72,7 @@ public enum SnapshotReason : byte
 public readonly record struct ClientHelloMessage(ushort Sequence, ulong ClientId, ushort ClientVersion, ushort CapabilityFlags);
 public readonly record struct TrustStatusMessage(ushort Sequence, TrustStatusCode Status, byte Reason, ushort ServerFlags, ulong ServerId);
 public readonly record struct ModeChangeMessage(ushort Sequence, RemoteInputMode Mode, ModeChangeSource Source, ushort Flags);
+public readonly record struct ReleaseAllMessage(ushort Sequence);
 public readonly record struct InputEventMessage(ushort Sequence, InputEventAction Action, byte HidUsage, byte Modifiers, byte EventFlags, ushort DeltaMilliseconds);
 public readonly record struct KeyboardSnapshotMessage(ushort Sequence, SnapshotReason Reason, byte Modifiers, byte PressedCount, IReadOnlyList<byte> Usages);
 
@@ -79,6 +88,64 @@ public static class ControlMessageCodec
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(12, 2), clientVersion);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(14, 2), capabilityFlags);
         return buffer;
+    }
+
+    public static byte[] EncodeTrustStatus(ushort sequence, TrustStatusCode status, byte reason, ushort serverFlags, ulong serverId)
+    {
+        var buffer = new byte[16];
+        buffer[0] = BridgeProtocol.Version;
+        buffer[1] = (byte)ControlMessageType.TrustStatus;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2, 2), sequence);
+        buffer[4] = (byte)status;
+        buffer[5] = reason;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(6, 2), serverFlags);
+        BinaryPrimitives.WriteUInt64LittleEndian(buffer.AsSpan(8, 8), serverId);
+        return buffer;
+    }
+
+    public static byte[] EncodeModeChange(ushort sequence, RemoteInputMode mode, ModeChangeSource source, ushort flags)
+    {
+        var buffer = new byte[8];
+        buffer[0] = BridgeProtocol.Version;
+        buffer[1] = (byte)ControlMessageType.ModeChange;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2, 2), sequence);
+        buffer[4] = (byte)mode;
+        buffer[5] = (byte)source;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(6, 2), flags);
+        return buffer;
+    }
+
+    public static byte[] EncodeReleaseAll(ushort sequence)
+    {
+        var buffer = new byte[4];
+        buffer[0] = BridgeProtocol.Version;
+        buffer[1] = (byte)ControlMessageType.ReleaseAll;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2, 2), sequence);
+        return buffer;
+    }
+
+    public static bool TryDecodeClientHello(byte[] payload, out ClientHelloMessage message)
+    {
+        message = default;
+
+        if (payload.Length < 16)
+        {
+            return false;
+        }
+
+        if (payload[0] != BridgeProtocol.Version || payload[1] != (byte)ControlMessageType.ClientHello)
+        {
+            return false;
+        }
+
+        message = new ClientHelloMessage(
+            Sequence: BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(2, 2)),
+            ClientId: BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(4, 8)),
+            ClientVersion: BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(12, 2)),
+            CapabilityFlags: BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(14, 2))
+        );
+
+        return true;
     }
 
     public static bool TryDecodeTrustStatus(byte[] payload, out TrustStatusMessage message)
@@ -129,10 +196,66 @@ public static class ControlMessageCodec
 
         return true;
     }
+
+    public static bool TryDecodeReleaseAll(byte[] payload, out ReleaseAllMessage message)
+    {
+        message = default;
+
+        if (payload.Length < 4)
+        {
+            return false;
+        }
+
+        if (payload[0] != BridgeProtocol.Version || payload[1] != (byte)ControlMessageType.ReleaseAll)
+        {
+            return false;
+        }
+
+        message = new ReleaseAllMessage(
+            Sequence: BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(2, 2))
+        );
+
+        return true;
+    }
 }
 
 public static class InputMessageCodec
 {
+    public static byte[] EncodeInputEvent(InputEventMessage message)
+    {
+        var buffer = new byte[12];
+        buffer[0] = BridgeProtocol.Version;
+        buffer[1] = 0x10;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2, 2), message.Sequence);
+        buffer[4] = (byte)message.Action;
+        buffer[5] = message.HidUsage;
+        buffer[6] = message.Modifiers;
+        buffer[7] = message.EventFlags;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(8, 2), message.DeltaMilliseconds);
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(10, 2), 0);
+        return buffer;
+    }
+
+    public static byte[] EncodeSnapshot(KeyboardSnapshotMessage message)
+    {
+        var buffer = new byte[14];
+        buffer[0] = BridgeProtocol.Version;
+        buffer[1] = 0x20;
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(2, 2), message.Sequence);
+        buffer[4] = (byte)message.Reason;
+        buffer[5] = message.Modifiers;
+
+        var clippedUsages = message.Usages.Take(6).ToArray();
+        buffer[6] = (byte)Math.Min(message.PressedCount, clippedUsages.Length);
+        buffer[7] = 0;
+        for (var index = 0; index < clippedUsages.Length; index += 1)
+        {
+            buffer[8 + index] = clippedUsages[index];
+        }
+
+        return buffer;
+    }
+
     public static bool TryDecodeInputEvent(byte[] payload, out InputEventMessage message)
     {
         message = default;

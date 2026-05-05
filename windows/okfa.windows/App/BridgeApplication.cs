@@ -8,7 +8,7 @@ namespace KeyboardBridge.Windows.App;
 public sealed class BridgeApplication
 {
     private readonly BridgeScanner _scanner = new();
-    private readonly TrustedMacStore _trustedMacStore = new();
+    private readonly TrustedSenderStore _trustedSenderStore = new();
     private readonly InputInjector _inputInjector = new();
     private readonly Dictionary<ulong, DateTimeOffset> _lastLoggedAtByAddress = new();
     private BridgeSession? _session;
@@ -21,7 +21,7 @@ public sealed class BridgeApplication
         _scanner.DeviceFound += OnDeviceFound;
         _scanner.Start();
 
-        Console.WriteLine("Scanning for okfa Mac devices. Press Enter to stop.");
+        Console.WriteLine("Scanning for okfa sender PCs. Press Enter to stop.");
         Console.ReadLine();
 
         _scanner.Stop();
@@ -56,6 +56,11 @@ public sealed class BridgeApplication
                 _inputInjector.ReleaseAllInjectedKeys();
             }
         };
+        _session.ReleaseAllReceived += (_, releaseAll) =>
+        {
+            Console.WriteLine($"ReleaseAll sequence={releaseAll.Sequence}");
+            _inputInjector.ReleaseAllInjectedKeys();
+        };
         _session.SnapshotReceived += (_, snapshot) =>
         {
             var usages = snapshot.Usages.Count == 0 ? "<none>" : string.Join(", ", snapshot.Usages.Select(static usage => $"0x{usage:X2}"));
@@ -76,7 +81,7 @@ public sealed class BridgeApplication
         try
         {
             await _session.ConnectAsync(advertisement.BluetoothAddress);
-            await _session.SendClientHelloAsync(_trustedMacStore.ClientId, clientVersion: 1, capabilityFlags: 0);
+            await _session.SendClientHelloAsync(_trustedSenderStore.ClientId, clientVersion: 1, capabilityFlags: 0);
         }
         catch (Exception exception)
         {

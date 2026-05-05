@@ -12,7 +12,7 @@ public sealed class AllDevicesForm : Form
     {
         _connectedAddress = connectedAddress;
 
-        Text = "okfa";
+        Text = "okfa Sender Picker";
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false;
@@ -71,7 +71,7 @@ public sealed class AllDevicesForm : Form
             Font = new Font("Segoe UI Variable Display", 22f, FontStyle.Bold, GraphicsUnit.Point),
             ForeColor = Color.FromArgb(24, 28, 34),
             Margin = new Padding(0, 0, 0, 8),
-            Text = "Choose a Mac",
+            Text = "Choose a Sender PC",
         };
 
         var subtitleLabel = new Label
@@ -80,7 +80,7 @@ public sealed class AllDevicesForm : Form
             Font = new Font("Segoe UI Variable Text", 12.5f, FontStyle.Regular, GraphicsUnit.Point),
             ForeColor = Color.FromArgb(100, 108, 124),
             Margin = new Padding(0, 0, 0, 20),
-            Text = "Select the Mac you want this PC to listen to.",
+            Text = "Select the sender PC you want this receiver to listen to.",
         };
 
         var listHost = new Panel
@@ -106,7 +106,7 @@ public sealed class AllDevicesForm : Form
         _deviceList.BackColor = Color.White;
         _deviceList.ForeColor = Color.FromArgb(24, 28, 34);
         _deviceList.Font = new Font("Segoe UI Variable Text", 10.5f, FontStyle.Regular, GraphicsUnit.Point);
-        _deviceList.Columns.Add("Mac", 250);
+        _deviceList.Columns.Add("Sender PC", 250);
         _deviceList.Columns.Add("Signal", 100, HorizontalAlignment.Right);
         _deviceList.Columns.Add("Match", 120);
         _deviceList.Columns.Add("State", 120);
@@ -171,7 +171,7 @@ public sealed class AllDevicesForm : Form
         };
 
         ConfigureButton(_connectButton, BridgeButtonKind.Primary, 170);
-        _connectButton.Text = "Use This Mac";
+        _connectButton.Text = "Use This PC";
         _connectButton.Margin = new Padding(12, 0, 0, 0);
         _connectButton.Click += (_, _) => ConfirmSelection();
 

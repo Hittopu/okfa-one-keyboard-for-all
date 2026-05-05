@@ -31,7 +31,7 @@ rm -rf "$APP_DIR"
 mkdir -p "$BIN_DIR" "$RES_DIR"
 
 if [[ -d "$SOURCE_RES_DIR" ]]; then
-  cp -R "$SOURCE_RES_DIR"/. "$RES_DIR"/
+  ditto "$SOURCE_RES_DIR" "$RES_DIR"
 fi
 
 cat > "$GENERATED_SWIFT" <<EOF

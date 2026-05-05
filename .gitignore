@@ -8,10 +8,8 @@ mac/*.app
 
 windows/okfa.windows/bin/
 windows/okfa.windows/obj/
-windows/okfa.windows/publish/
-windows/installer/work/
 windows/installer/dist/
-windows/installer/payload/
+windows/installer/publish/
 
 *.zip
 *.user

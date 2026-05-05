@@ -54,10 +54,10 @@ public sealed class BridgeScanner : IDisposable
         aggregate.Rssi = args.RawSignalStrengthInDBm;
         _advertisements[args.BluetoothAddress] = aggregate;
 
-        var looksLikeKeyboardBridge = aggregate.HasTargetService
+        var looksLikeOkfaPeer = aggregate.HasTargetService
             || (!string.IsNullOrWhiteSpace(aggregate.LocalName) && aggregate.LocalName.Contains("okfa", StringComparison.OrdinalIgnoreCase));
 
-        if (!looksLikeKeyboardBridge)
+        if (!looksLikeOkfaPeer)
         {
             return;
         }
@@ -66,7 +66,7 @@ public sealed class BridgeScanner : IDisposable
             this,
             new BridgeAdvertisement(
                 BluetoothAddress: args.BluetoothAddress,
-                LocalName: aggregate.LocalName ?? "okfa Mac",
+                LocalName: aggregate.LocalName ?? "okfa Sender PC",
                 Rssi: aggregate.Rssi,
                 HasTargetService: aggregate.HasTargetService
             )

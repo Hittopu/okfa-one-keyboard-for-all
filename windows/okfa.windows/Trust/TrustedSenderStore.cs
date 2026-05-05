@@ -2,14 +2,14 @@ using System.Security.Cryptography;
 
 namespace KeyboardBridge.Windows.Trust;
 
-public sealed class TrustedMacStore
+public sealed class TrustedSenderStore
 {
     private const string AppDataFolderName = "okfa";
     private const string LegacyAppDataFolderName = "KeyboardBridge.Windows";
     private readonly string _filePath;
     private readonly PersistedState _state;
 
-    public TrustedMacStore()
+    public TrustedSenderStore()
     {
         var root = ResolveAppDataRoot();
         Directory.CreateDirectory(root);
